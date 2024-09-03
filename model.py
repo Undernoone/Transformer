@@ -1,15 +1,16 @@
 import torch
 from torch import nn
 
-class EED(nn.Module):
+class Embedding(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
-        super(EED, self).__init__(*args, **kwargs)
+        super(Embedding, self).__init__(*args, **kwargs)
         self.word_embedding = nn.Embedding(28, 24)
         self.pos_embedding = nn.Embedding(12, 24)
         self.pos_test = torch.arange(12).reshape(1, 12)
 
-    def forward(self,X: torch.Tensor):
-        return self.word_embedding(X) + self.pos_embedding(self.pos_test)
+    def forward(self, X: torch.Tensor):
+        X = self.word_embedding(X) + self.pos_embedding(self.pos_test)
+        return X
 
 '''
 I omitted Batch size,that X is (2, 12, 24)
@@ -37,7 +38,7 @@ def transpose_for_QKV(QKV):
 def transpose_for_O(O):
     O = O.transpose(-2, -3)
     # (2, 4, 12, 6) -> (2, 12, 4, 6)
-    O = O.reshape(O.shape[0], O.shape[1], O.shape[2]*O.shape[3])
+    O = O.reshape(O.shape[0], O.shape[1], -1)
     return O
 '''
 Four-head attention
@@ -79,13 +80,77 @@ class Attention_block(nn.Module):
         Q, K, V = self.Wq(X), self.Wk(X), self.Wv(X)
         Q, K, V = transpose_for_QKV(Q), transpose_for_QKV(K), transpose_for_QKV(V)
         O = attention(Q, K, V)
+        O = transpose_for_O(O)
         O = O @ self.Wo.weight
         return O
 
+# ADD & NORM
+class AddNorm(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(AddNorm, self).__init__(*args, **kwargs)
+        self.add_norm = nn.LayerNorm(24)
+        self.drop = nn.Dropout(0.1)
+
+    def forward(self, X, X1):
+        X = X + X1
+        X = self.add_norm(X)
+        X = self.drop(X)
+        return X
+
+# Position-wise Feed-Forward Networks
+class PositionWiseFFN(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(PositionWiseFFN, self).__init__(*args, **kwargs)
+        self.linear1 = nn.Linear(24, 48)
+        self.relu1 = nn.ReLU()
+        self.linear2 = nn.Linear(48, 24)
+        self.relu2 = nn.ReLU()
+
+    def forward(self, X):
+        X = self.linear1(X)
+        X = self.relu1(X)
+        X = self.linear2(X)
+        X = self.relu2(X)
+        return X
+
+
+class Encoder_block(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(Encoder_block, self).__init__(*args, **kwargs)
+        self.attention = Attention_block()
+        self.add_norm1 = AddNorm()
+        self.FFN = PositionWiseFFN()
+        self.add_norm2 = AddNorm()
+    def forward(self, X):
+        X1 = self.attention(X)
+        X = self.add_norm1(X, X1)
+        X1 = self.FFN(X)
+        X = self.add_norm2(X, X1)
+        return X
+
+
+class EncoderLayer(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(EncoderLayer, self).__init__(*args, **kwargs)
+        self.EED = Embedding()
+        self.Encoder_block = nn.Sequential()
+        self.Encoder_block.append(Encoder_block())
+        self.Encoder_block.append(Encoder_block())
+
+    def forward(self, X):
+        X = self.EED(X)
+        for encoder_block in self.Encoder_block:
+            X = encoder_block(X)
+        return X
+
+
 if __name__ == '__main__':
     test = torch.ones((2, 12)).long()
-    ebd = EED()
-    test = ebd(test)
-    attention = Attention_block()
-    test = attention(test)
+    # ebd = EED()
+    # test = ebd(test)
+    # attention = Attention_block()
+    # test = attention(test)
+    encoder = EncoderLayer()
+    test = encoder(test)
+    print(test.shape)
     pass
