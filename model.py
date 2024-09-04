@@ -9,7 +9,7 @@ class Embedding(nn.Module):
         self.pos_test = torch.arange(12).reshape(1, 12)
 
     def forward(self, X: torch.Tensor):
-        X = self.word_embedding(X) + self.pos_embedding(self.pos_test)
+        X = self.word_embedding(X) + self.pos_embedding(self.pos_test[:, :X.shape[-1]])
         return X
 
 '''
@@ -53,8 +53,9 @@ Pytorch need input size = output size, so we need to reshape O(4, 12, 6) -> O(12
 The above method creates two new transpose function implementations.
 '''
 
-def attention(Q, K, V):
-    A = Q @ K.transpose(-1, -2) / Q.shape[-1] ** 0.5
+def attentionScore(Q, K, V):
+    Sqrt_Q = Q.shape[-1] ** 0.5
+    A = Q @ K.transpose(-1, -2) / Sqrt_Q
     A = nn.Softmax(dim=-1)(A)
     O = A @ V
     return O
@@ -68,7 +69,7 @@ class Attention_block(nn.Module):
         self.Wo = nn.Linear(24, 24, bias=False)
 
     ''' 
-    # Normal attention
+    # Normal attentiond
     def forward(self, X: torch.Tensor):
         Q, K, V = self.Wq(X), self.Wk(X), self.Wv(X)
         O = attention(Q, K, V)
@@ -79,7 +80,24 @@ class Attention_block(nn.Module):
     def forward(self, X: torch.Tensor):
         Q, K, V = self.Wq(X), self.Wk(X), self.Wv(X)
         Q, K, V = transpose_for_QKV(Q), transpose_for_QKV(K), transpose_for_QKV(V)
-        O = attention(Q, K, V)
+        O = attentionScore(Q, K, V)
+        O = transpose_for_O(O)
+        O = O @ self.Wo.weight
+        return O
+
+class CrossAttention_block(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(CrossAttention_block, self).__init__(*args, **kwargs)
+        self.Wq = nn.Linear(24, 24, bias=False)
+        self.Wk = nn.Linear(24, 24, bias=False)
+        self.Wv = nn.Linear(24, 24, bias=False)
+        self.Wo = nn.Linear(24, 24, bias=False)
+
+    # Multi-head attention
+    def forward(self, X: torch.Tensor, X_encoder: torch.Tensor):
+        Q, K, V = self.Wq(X), self.Wk(X_encoder), self.Wv(X_encoder)
+        Q, K, V = transpose_for_QKV(Q), transpose_for_QKV(K), transpose_for_QKV(V)
+        O = attentionScore(Q, K, V)
         O = transpose_for_O(O)
         O = O @ self.Wo.weight
         return O
@@ -128,6 +146,23 @@ class Encoder_block(nn.Module):
         X = self.add_norm2(X, X1)
         return X
 
+class Decoder_block(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(Decoder_block, self).__init__(*args, **kwargs)
+        self.attention = Attention_block()
+        self.add_norm1 = AddNorm()
+        self.crossAttention = CrossAttention_block()
+        self.add_norm2 = AddNorm()
+        self.FFN = PositionWiseFFN()
+        self.add_norm3 = AddNorm()
+    def forward(self, X, X_encoder):
+        X1 = self.attention(X)
+        X = self.add_norm1(X, X1)
+        X1 = self.crossAttention(X, X_encoder)
+        X = self.add_norm2(X, X1)
+        X1 = self.FFN(X)
+        X = self.add_norm3(X, X1)
+        return X
 
 class EncoderLayer(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
@@ -144,13 +179,38 @@ class EncoderLayer(nn.Module):
         return X
 
 
+class DecoderLayer(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(DecoderLayer, self).__init__(*args, **kwargs)
+        self.EED = Embedding()
+        self.Decoder_block = nn.Sequential()
+        self.Decoder_block.append(Decoder_block())
+        self.Decoder_block.append(Decoder_block())
+        self.linear1 = nn.Linear(24, 28)
+
+    def forward(self, X, X_encoder):
+        X = self.EED(X)
+        for decoder_block in self.Decoder_block:
+            X = decoder_block(X, X_encoder)
+        X = self.linear1(X) # Decoder rather than Encoder a Linear layer, Because need to transform dimension from 24 to 28
+        return X
+
+class Transformer(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(Transformer, self).__init__(*args, **kwargs)
+        self.EncoderLayer = EncoderLayer()
+        self.DecoderLayer = DecoderLayer()
+    def forward(self, X_sourse, X_target):
+        X_encoder = self.EncoderLayer(X_sourse)
+        X_decoder = self.DecoderLayer(X_target, X_encoder)
+        return X_decoder
+
 if __name__ == '__main__':
-    test = torch.ones((2, 12)).long()
-    # ebd = EED()
-    # test = ebd(test)
-    # attention = Attention_block()
-    # test = attention(test)
-    encoder = EncoderLayer()
-    test = encoder(test)
+    source = torch.ones((2, 12)).long()
+    target = torch.ones((2, 4)).long()
+    transformer = Transformer()
+    test = transformer(source, target)
+    print(test)
     print(test.shape)
     pass
+
