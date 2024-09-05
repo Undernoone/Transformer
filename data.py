@@ -3,10 +3,7 @@ from torch.utils.data import Dataset
 from copy import deepcopy
 import numpy as np
 
-import torch
-from torch.utils.data import Dataset, DataLoader
-
-vocab_list = ["[BOS]", "[EOS]", "createTextNode", 'a', 'b', 'c', 'd','e', 'f', 'g', 'h','i', 'j', 'k', 'l','m', 'n',
+vocab_list = ["[BOS]", "[EOS]", "[PAD]", 'a', 'b', 'c', 'd','e', 'f', 'g', 'h','i', 'j', 'k', 'l','m', 'n',
              'o', 'p','q', 'r', 's', 't','u', 'v', 'w', 'x','y', 'z']
 char_list = ["[BOS]", "[EOS]", "[PAD]", 'a', 'b', 'c', 'd','e', 'f', 'g', 'h','i', 'j', 'k', 'l','m', 'n',
              'o', 'p','q', 'r', 's', 't','u', 'v', 'w', 'x','y', 'z']
@@ -15,25 +12,28 @@ eos_token = "[EOS]"
 pad_token = "[PAD]"
 
 def process_date(source, target):
-    max_length = 12
-    if len(source) > max_length:
-        source = source[:max_length]
-    if len(target) > max_length-1:
-        target = target[:max_length-1]
+    maxLength = 12
+    if len(source) > maxLength: # generateData有13的
+        source = source[:maxLength]
+    if len(target) > maxLength-1: # 一会看看为什么-1
+        target = target[:maxLength-1]
+    # 转为编号
     source_id = [vocab_list.index(p) for p in source]
     target_id = [vocab_list.index(p) for p in target]
     target_id = [vocab_list.index("[BOS]")] + target_id + [vocab_list.index("[EOS]")]
-    source_m = np.array([1] * max_length)
-    target_m = np.array([1] * (max_length + 1))
-    if len(source_id) < max_length:
-        pad_len = max_length - len(source_id)
+    source_m = np.array([1] * maxLength)
+    target_m = np.array([1] * (maxLength + 1))
+    if len(source_id) < maxLength:
+        pad_len = maxLength - len(source_id)
         source_id += [vocab_list.index("[PAD]")] * pad_len
         source_m[-pad_len:] = 0
-    if len(target_id) < max_length + 1:
-        pad_len = max_length - len(target_id) + 1
+        # source_id += [vocab_list.index(pad_token)] * (maxLength - len(source_id))
+    if len(target_id) < maxLength + 1:
+        pad_len = maxLength - len(target_id) + 1
         target_id += [vocab_list.index("[PAD]")] * pad_len
         target_m[-pad_len:] = 0
-    return source_id, target_id
+        # target_id += [vocab_list.index(pad_token)] * (maxLength - len(target_id) + 1)
+    return source_id, source_m, target_id, target_m
 
 class MyDataset(Dataset):
     def __init__(self, source_path, target_path) -> None:
@@ -54,7 +54,15 @@ class MyDataset(Dataset):
         return len(self.sourceList)
 
     def __getitem__(self, index):
-        return self.sourceList[index], self.targetList[index] # 输入和输出必须相等
+        source_id, source_m, target_id, target_m = process_date(self.sourceList[index], self.targetList[index])
+        return (torch.tensor(source_id, dtype=torch.long), torch.tensor(source_m, dtype=torch.long),
+                torch.tensor(target_id, dtype=torch.long), torch.tensor(target_m, dtype=torch.long))
+
+# 生成的数据是3-13之间，但是Transformermodel的输入长度是12，所以需要对数据进行处理
 
 if __name__ == '__main__':
     test_data = MyDataset("source.txt", "target.txt")
+    source_id, source_m, target_id, target_m = test_data[2]
+    pass
+
+
