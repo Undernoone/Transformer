@@ -5,40 +5,52 @@ from torch import nn
 from torch.optim import AdamW
 from tqdm import tqdm
 import torch
+import matplotlib.pyplot as plt
 
-model = Transformer().cuda()
+# Initialize model, dataset, dataloader, loss function, and optimizer
+my_model = Transformer().cuda()
 dataset = MyDataset("source.txt", "target.txt")
-dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+dataloader = DataLoader(dataset, 32, shuffle=True)
+loss_func = nn.CrossEntropyLoss(ignore_index=2)
+trainer = AdamW(params=my_model.parameters(), lr=0.0005)
 
-lossFunction = nn.CrossEntropyLoss(ignore_index=2)
-optimizer = AdamW(params=model.parameters(), lr=1e-5, betas=(0.9, 0.98), eps=1e-9)
+# Lists to store epoch and loss values
+epochs = []
+losses = []
 
-for epoch in range(200):
-    model.train()
+# Training loop
+for epoch in range(100):
+    t = tqdm(dataloader)
     epoch_loss = 0
-    t = tqdm(dataloader, desc=f"Epoch {epoch+1}")
-
     for input_id, input_m, output_id, output_m in t:
-        input_id, input_m = input_id.cuda(), input_m.cuda()
-        output_id, output_m = output_id.cuda(), output_m.cuda()
-
-        output = model(input_id, input_m, output_id[:, :-1], output_m[:, :-1])
-
-        target = output_id[:, 1:]
-
-        output_reshaped = output.reshape(-1, output.size(-1))
-        target_reshaped = target.reshape(-1)
-        loss = lossFunction(output_reshaped, target_reshaped)
-
-        optimizer.zero_grad()
+        output = my_model(input_id.cuda(), input_m.cuda(), output_id[:, :-1].cuda(), output_m[:, :-1].cuda())
+        target = output_id[:, 1:].cuda()
+        loss = loss_func(output.reshape(-1, 29), target.reshape(-1))
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
-        optimizer.step()
+        torch.nn.utils.clip_grad_norm_(my_model.parameters(), 1)
+        trainer.step()
+        trainer.zero_grad()
 
+        # Accumulate loss
         epoch_loss += loss.item()
-        t.set_postfix(loss=loss.item())
 
+        # Update tqdm description
+        t.set_description(f'Epoch {epoch + 1}, Loss: {loss.item():.4f}')
+
+    # Average loss for the epoch
     avg_loss = epoch_loss / len(dataloader)
-    print(f"Epoch {epoch+1} Average Loss: {avg_loss:.4f}")
+    epochs.append(epoch + 1)
+    losses.append(avg_loss)
 
-torch.save(model.state_dict(), "model.pth")
+# Save model state
+torch.save(my_model.state_dict(), "model.pth")
+
+# Plotting
+plt.figure(figsize=(10, 5))
+plt.plot(epochs, losses, marker='o', linestyle='-', color='b')
+plt.title('Training Loss over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.grid(True)
+plt.savefig('loss_plot.png')
+plt.show()

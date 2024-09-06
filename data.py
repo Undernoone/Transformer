@@ -4,14 +4,20 @@ from copy import deepcopy
 import numpy as np
 
 vocab_list = ["[BOS]", "[EOS]", "[PAD]", 'a', 'b', 'c', 'd','e', 'f', 'g', 'h','i', 'j', 'k', 'l','m', 'n',
-             'o', 'p','q', 'r', 's', 't','u', 'v', 'w', 'x','y', 'z']
+              'o', 'p','q', 'r', 's', 't','u', 'v', 'w', 'x','y', 'z']
 char_list = ["[BOS]", "[EOS]", "[PAD]", 'a', 'b', 'c', 'd','e', 'f', 'g', 'h','i', 'j', 'k', 'l','m', 'n',
              'o', 'p','q', 'r', 's', 't','u', 'v', 'w', 'x','y', 'z']
 bos_token = "[BOS]"
 eos_token = "[EOS]"
 pad_token = "[PAD]"
 
-def process_date(source, target):
+# def pad_sequence(seq, max_length, pad_value): # 填充序列
+#     pad_len = max_length - len(seq)
+#     if pad_len > 0:
+#         seq += [pad_value] * pad_len
+#     return seq
+
+def process_data(source, target, max_length=None):
     maxLength = 12
     if len(source) > maxLength: # generateData有13的
         source = source[:maxLength]
@@ -23,6 +29,12 @@ def process_date(source, target):
     target_id = [vocab_list.index("[BOS]")] + target_id + [vocab_list.index("[EOS]")]
     source_m = np.array([1] * maxLength)
     target_m = np.array([1] * (maxLength + 1))
+    # source_id = pad_sequence(source_id, max_length, vocab_list.index("[PAD]"))
+    # target_id = pad_sequence(target_id, max_length + 1, vocab_list.index("[PAD]"))
+    # if len(source_id) < max_length:
+    #     source_m[-(max_length - len(source_id)):] = 0
+    # if len(target_id) < max_length + 1:
+    #     target_m[-(max_length - len(target_id) + 1):] = 0
     if len(source_id) < maxLength:
         pad_len = maxLength - len(source_id)
         source_id += [vocab_list.index("[PAD]")] * pad_len
@@ -54,7 +66,7 @@ class MyDataset(Dataset):
         return len(self.sourceList)
 
     def __getitem__(self, index):
-        source_id, source_m, target_id, target_m = process_date(self.sourceList[index], self.targetList[index])
+        source_id, source_m, target_id, target_m = process_data(self.sourceList[index], self.targetList[index])
         return (torch.tensor(source_id, dtype=torch.long), torch.tensor(source_m, dtype=torch.long),
                 torch.tensor(target_id, dtype=torch.long), torch.tensor(target_m, dtype=torch.long))
 
@@ -64,5 +76,3 @@ if __name__ == '__main__':
     test_data = MyDataset("source.txt", "target.txt")
     source_id, source_m, target_id, target_m = test_data[2]
     pass
-
-

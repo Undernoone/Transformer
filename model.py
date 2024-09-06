@@ -47,10 +47,10 @@ The above method creates two new transpose function implementations.
 
 def attentionScore(Q, K, V, M):
     SqrtQ = Q.shape[-1] ** 0.5
-    M = M.unsqueeze(1)
     A = Q @ K.transpose(-1, -2) / SqrtQ
+    M = M.unsqueeze(1)
     A.masked_fill_(M == 0, -torch.tensor(float('inf')))
-    A = nn.Softmax(dim=-1)(A)
+    A = torch.softmax(A, dim=-1)
     O = A @ V
     return O
 
@@ -79,7 +79,7 @@ class Attention_block(nn.Module):
     # Normal attentiond
     def forward(self, X: torch.Tensor):
         Q, K, V = self.Wq(X), self.Wk(X), self.Wv(X)
-        O = attention(Q, K, V)
+        O = attentionScore(Q, K, V)
         O = O @ self.Wo.weight
     '''
 
@@ -115,12 +115,12 @@ class AddNorm(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super(AddNorm, self).__init__(*args, **kwargs)
         self.add_norm = nn.LayerNorm(numHidden)
-        self.drop = nn.Dropout(0.1)
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, X, X1):
         X1 = self.add_norm(X1)
         X = X + X1
-        X = self.drop(X)
+        X = self.dropout(X)
         return X
 
 # Position-wise Feed-Forward Networks
