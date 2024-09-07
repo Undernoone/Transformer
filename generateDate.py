@@ -3,7 +3,7 @@ import random
 # English has 26 characters, but we use 29 to because we have Bos、Eos and Pad tokens in the vocabulary list
 vocab_list = ["[BOS]", "[EOS]", "[PAD]", 'a', 'b', 'c', 'd','e', 'f', 'g', 'h','i', 'j', 'k', 'l','m', 'n',
               'o', 'p','q', 'r', 's', 't','u', 'v', 'w', 'x','y', 'z']
-char_list = vocab_list[3:]  # Removing BOS and EOS and Padding from the list
+char_list = vocab_list[3:]  # Removing BOS 、EOS and Padding from the list
 bos_token = "[BOS]"  # Beginning of sentence token
 eos_token = "[EOS]"  # End of sentence token
 pad_token = "[PAD]"  # Padding token
@@ -26,10 +26,10 @@ with open(target_token, "w") as f:
 for _ in range(10000):
     source_str = ""
     target_str = ""
-    for index in range(random.randint(3, 10)): # random length of source and target string from 3 to 13
-        i = random.randint(0, 25)  # Index to access al phabetic characters only
+    for index in range(random.randint(3, 13)): # random length of source and target string from 3 to 13
+        i = random.randint(0, 25)
         source_str += char_list[i]
-        target_str += char_list[(i + 26 - 5) % 26]  # Use the 5th character of the alphabetic characters as target
+        target_str += char_list[(i + 26 - 5) % 26]
     target_str = target_str[::-1] # Reverse the target string
     with open(source_path, "a") as f:
         f.write(source_str + "\n")
