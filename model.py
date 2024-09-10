@@ -220,5 +220,4 @@ class Transformer(nn.Module):
         return X_decoder
 
 if __name__ == "__main__":
-
     pass
