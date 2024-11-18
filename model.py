@@ -1,3 +1,9 @@
+"""
+Author: Coder729
+Date: 2023/9/23
+Description: Transformer model
+"""
+
 import torch
 from torch import nn
 
@@ -219,5 +225,6 @@ class Transformer(nn.Module):
         X_decoder = self.DecoderLayer(X_target, outputMask, X_encoder, inputMask)
         return X_decoder
 
-if __name__ == "__main__":
-    pass
+model = Transformer()
+print(model)
+
